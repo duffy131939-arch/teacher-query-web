@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教師研習進度查詢</title>
+    <style>
+        /* CSS 樣式 */
+        body { font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }
+        .container { max-width: 600px; margin: auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        h1 { color: #007bff; text-align: center; }
+        input[type="text"], button { padding: 10px; margin-bottom: 10px; width: 100%; box-sizing: border-box; }
+        button { background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        #results { margin-top: 20px; padding: 15px; border: 1px dashed #007bff; border-radius: 4px; background-color: #e9f5ff; }
+        h3 { margin-top: 15px; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+        ul { list-style: none; padding-left: 0; }
+        .completed { color: green; }
+        .pending { color: red; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>教師研習進度查詢</h1>
+        
+        <form id="searchForm">
+            <label for="teacherName">請輸入您的姓名：</label>
+            <input type="text" id="teacherName" required placeholder="例如：王小明">
+            
+            <button type="submit">查詢進度</button>
+        </form>
+
+        <div id="results">
+            <p>輸入姓名後，請點擊查詢按鈕。</p>
+        </div>
+    </div>
+
+    <script>
+        // JavaScript 程式碼
+
+        // 【重要】將 '貼上您 Apps Script 的部署網址' 替換為步驟二中複製的真實網址
+        const API_URL = 'https://script.google.com/macros/s/AKfycbxd6-v_yMZQ53O6mtj4HHOHD84-6gJH1OGDW0CAYqqHrHsLcHk48gQ3hUYrePSMJtGDjA/exec'; 
+
+        document.getElementById('searchForm').addEventListener('submit', function(event) {
+            event.preventDefault(); 
+            const name = document.getElementById('teacherName').value.trim();
+            
+            if (name) {
+                fetchTrainingData(name);
+            } else {
+                document.getElementById('results').innerHTML = '<p style="color: red;">請務必輸入您的姓名！</p>';
+            }
+        });
+
+        async function fetchTrainingData(teacherName) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<h2>查詢中...請稍候</h2>';
+
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) {
+                    throw new Error(`API 連接失敗 (HTTP 狀態碼: ${response.status})`);
+                }
+                const allRecords = await response.json();
+
+                // 檢查 API 是否回傳 Apps Script 錯誤
+                if (allRecords && allRecords.error) {
+                    throw new Error(allRecords.error);
+                }
+
+                resultsDiv.innerHTML = `<h2>${teacherName} 老師的研習進度</h2>`;
+
+                // 1. 過濾出符合姓名的資料
+                const records = allRecords.filter(record => 
+                    // 確保 record.name 存在，並去除空格後與輸入姓名匹配
+                    record.name && String(record.name).trim() === teacherName
+                );
+                
+                if (records.length === 0) {
+                    resultsDiv.innerHTML += `<p style="color: blue;">資料庫中沒有找到 ${teacherName} 老師的研習記錄。</p>`;
+                    return;
+                }
+
+                // 2. 修正後的分類邏輯：應對複雜的狀態字串
+                
+                // 只要狀態字串中包含「未完成」，就視為未完成。
+                const pending = records.filter(r => 
+                    String(r.status).includes('未完成')
+                );
+
+                // 只要狀態字串中包含「完成」，且不包含「未完成」，就視為已完成。
+                const completed = records.filter(r => {
+                    const statusStr = String(r.status);
+                    return statusStr.includes('完成') && !statusStr.includes('未完成');
+                });
+
+                // 3. 顯示結果
+                
+                let completedHtml = `<h3>✅ 已完成 (${completed.length} 項)</h3>`;
+                if (completed.length > 0) {
+                    completedHtml += '<ul>' + completed.map(r => 
+                        // 顯示完整的狀態字串
+                        `<li class="completed">${r.training} (${r.status})</li>` 
+                    ).join('') + '</ul>';
+                } else {
+                    completedHtml += '<p>目前沒有已完成的研習。</p>';
+                }
+
+                let pendingHtml = `<h3>❌ 未完成 (${pending.length} 項)</h3>`;
+                if (pending.length > 0) {
+                    pendingHtml += '<ul>' + pending.map(r => 
+                        // 顯示完整的未完成狀態字串
+                        `<li class="pending">${r.training} (${r.status})</li>`
+                    ).join('') + '</ul>';
+                } else {
+                    pendingHtml += '<p>太棒了！所有研習已全部完成。</p>';
+                }
+
+                resultsDiv.innerHTML += completedHtml + pendingHtml;
+
+            } catch (error) {
+                resultsDiv.innerHTML = `<p style="color: red;">查詢發生錯誤。請檢查網路連線或 Apps Script 部署。<br>詳情: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>
